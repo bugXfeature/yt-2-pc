@@ -6,15 +6,33 @@ import os
 
 app = Flask(__name__)
 
+
+def create_youtube_client(url, on_progress_callback=None):
+    """Create a non-interactive YouTube client suitable for cloud environments."""
+    kwargs = {}
+    if on_progress_callback is not None:
+        kwargs['on_progress_callback'] = on_progress_callback
+
+    # Railway and other PaaS environments are non-interactive; PO token prompts fail with EOF.
+    try:
+        return YouTube(url, use_po_token=False, **kwargs)
+    except TypeError:
+        # Compatibility fallback if running against a version without use_po_token.
+        return YouTube(url, **kwargs)
+
 @app.route('/')
 def index():
     return render_template('index.html')
 
 @app.route('/get_qualities', methods=['POST'])
 def get_qualities():
-    url = request.json.get('url')
+    payload = request.get_json(silent=True) or {}
+    url = (payload.get('url') or '').strip()
+    if not url:
+        return jsonify({'error': 'Missing YouTube URL'}), 400
+
     try:
-        yt = YouTube(url, use_po_token=True)
+        yt = create_youtube_client(url)
         video_streams = yt.streams.filter(adaptive=True, file_extension='mp4', only_video=True).order_by('resolution')
         resolutions = []
         seen = set()
@@ -28,13 +46,16 @@ def get_qualities():
 
 @app.route('/download', methods=['POST'])
 def download():
-    url = request.form['url']
+    url = request.form.get('url', '').strip()
     mode = request.form.get('mode', 'video')  # 'video' or 'audio'
     resolution = request.form.get('resolution', 'highest')
     save_path = request.form.get('save_path', '').strip()
 
+    if not url:
+        return 'Error: Missing YouTube URL', 400
+
     try:
-        yt = YouTube(url, on_progress_callback=on_progress, use_po_token=True)
+        yt = create_youtube_client(url, on_progress_callback=on_progress)
 
         if mode == 'audio':
             audio_stream = yt.streams.filter(adaptive=True, file_extension='mp4', only_audio=True).order_by('abr').last()

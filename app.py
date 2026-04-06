@@ -14,7 +14,7 @@ def index():
 def get_qualities():
     url = request.json.get('url')
     try:
-        yt = YouTube(url)
+        yt = YouTube(url, use_po_token=True)
         video_streams = yt.streams.filter(adaptive=True, file_extension='mp4', only_video=True).order_by('resolution')
         resolutions = []
         seen = set()
@@ -34,7 +34,7 @@ def download():
     save_path = request.form.get('save_path', '').strip()
 
     try:
-        yt = YouTube(url, on_progress_callback=on_progress)
+        yt = YouTube(url, on_progress_callback=on_progress, use_po_token=True)
 
         if mode == 'audio':
             audio_stream = yt.streams.filter(adaptive=True, file_extension='mp4', only_audio=True).order_by('abr').last()
